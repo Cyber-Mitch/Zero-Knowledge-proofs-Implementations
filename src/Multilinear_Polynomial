@@ -1,0 +1,237 @@
+use std::collections::HashMap;
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq)]
+struct Term {
+    coefficient: f64,          // Coefficient of the term
+    variables: Vec<char>,      // Variables in the term (e.g., ['x', 'y'])
+}
+
+impl Term {
+    // Custom comparison function for sorting terms
+    fn cmp_variables(&self, other: &Self) -> std::cmp::Ordering {
+        self.variables.cmp(&other.variables)
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, PartialEq)]
+struct MultilinearPolynomial {
+    terms: Vec<Term>,          // List of terms in the polynomial
+}
+
+#[allow(dead_code)]
+impl MultilinearPolynomial {
+    // Partially evaluate the polynomial by fixing some variables
+    fn partial_evaluate(&self, fixed_vars: &HashMap<char, f64>) -> MultilinearPolynomial {
+        let mut term_map: HashMap<Vec<char>, f64> = HashMap::new();
+
+        for term in &self.terms {
+            let mut new_coefficient = term.coefficient;
+            let mut new_variables = Vec::new();
+
+            // Substitute fixed variables and update the coefficient
+            for &var in &term.variables {
+                if let Some(&value) = fixed_vars.get(&var) {
+                    new_coefficient *= value; // Multiply by the fixed value
+                } else {
+                    new_variables.push(var); // Keep the variable if it's not fixed
+                }
+            }
+
+            // Sort the variables to ensure consistent grouping
+            new_variables.sort();
+
+            // Add the term to the map, combining coefficients for terms with the same variables
+            *term_map.entry(new_variables).or_insert(0.0) += new_coefficient;
+        }
+
+        // Convert the map back into a vector of terms
+        let mut new_terms: Vec<Term> = term_map
+            .into_iter()
+            .filter(|(_, coeff)| *coeff != 0.0) // Remove terms with zero coefficients
+            .map(|(vars, coeff)| Term {
+                coefficient: coeff,
+                variables: vars,
+            })
+            .collect();
+
+        // Sort the terms using the custom comparison function
+        new_terms.sort_by(|a, b| a.cmp_variables(b));
+
+        MultilinearPolynomial { terms: new_terms }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_partial_evaluate_no_fixed_vars() {
+        // Polynomial: 2x + 3y + 4xy + 5z
+        let polynomial = MultilinearPolynomial {
+            terms: vec![
+                Term {
+                    coefficient: 2.0,
+                    variables: vec!['x'],
+                },
+                Term {
+                    coefficient: 3.0,
+                    variables: vec!['y'],
+                },
+                Term {
+                    coefficient: 4.0,
+                    variables: vec!['x', 'y'],
+                },
+                Term {
+                    coefficient: 5.0,
+                    variables: vec!['z'],
+                },
+            ],
+        };
+
+        // No fixed variables
+        let fixed_vars: HashMap<char, f64> = HashMap::new();
+        let evaluated_polynomial = polynomial.partial_evaluate(&fixed_vars);
+
+        // Sort the terms in both the expected and actual results
+        let mut expected_terms = polynomial.terms.clone();
+        expected_terms.sort_by(|a, b| a.cmp_variables(b));
+
+        let mut evaluated_terms = evaluated_polynomial.terms.clone();
+        evaluated_terms.sort_by(|a, b| a.cmp_variables(b));
+
+        // Compare the sorted terms
+        assert_eq!(evaluated_terms, expected_terms);
+    }
+
+    #[test]
+    fn test_partial_evaluate_fixed_x_and_y() {
+        // Polynomial: 2x + 3y + 4xy + 5z
+        let polynomial = MultilinearPolynomial {
+            terms: vec![
+                Term {
+                    coefficient: 2.0,
+                    variables: vec!['x'],
+                },
+                Term {
+                    coefficient: 3.0,
+                    variables: vec!['y'],
+                },
+                Term {
+                    coefficient: 4.0,
+                    variables: vec!['x', 'y'],
+                },
+                Term {
+                    coefficient: 5.0,
+                    variables: vec!['z'],
+                },
+            ],
+        };
+
+        // Fix x = 2 and y = 3
+        let fixed_vars: HashMap<char, f64> = [('x', 2.0), ('y', 3.0)].iter().cloned().collect();
+        let evaluated_polynomial = polynomial.partial_evaluate(&fixed_vars);
+
+        // Expected result: 2(2) + 3(3) + 4(2)(3) + 5z = 4 + 9 + 24 + 5z = 37 + 5z
+        let expected_polynomial = MultilinearPolynomial {
+            terms: vec![
+                Term {
+                    coefficient: 37.0,
+                    variables: vec![],
+                },
+                Term {
+                    coefficient: 5.0,
+                    variables: vec!['z'],
+                },
+            ],
+        };
+
+        assert_eq!(evaluated_polynomial, expected_polynomial);
+    }
+
+    #[test]
+    fn test_partial_evaluate_fixed_x_zero() {
+        // Polynomial: 2x + 3y + 4xy + 5z
+        let polynomial = MultilinearPolynomial {
+            terms: vec![
+                Term {
+                    coefficient: 2.0,
+                    variables: vec!['x'],
+                },
+                Term {
+                    coefficient: 3.0,
+                    variables: vec!['y'],
+                },
+                Term {
+                    coefficient: 4.0,
+                    variables: vec!['x', 'y'],
+                },
+                Term {
+                    coefficient: 5.0,
+                    variables: vec!['z'],
+                },
+            ],
+        };
+
+        // Fix x = 0
+        let fixed_vars: HashMap<char, f64> = [('x', 0.0)].iter().cloned().collect();
+        let evaluated_polynomial = polynomial.partial_evaluate(&fixed_vars);
+
+        // Expected result: 2(0) + 3y + 4(0)y + 5z = 3y + 5z
+        let expected_polynomial = MultilinearPolynomial {
+            terms: vec![
+                Term {
+                    coefficient: 3.0,
+                    variables: vec!['y'],
+                },
+                Term {
+                    coefficient: 5.0,
+                    variables: vec!['z'],
+                },
+            ],
+        };
+
+        assert_eq!(evaluated_polynomial, expected_polynomial);
+    }
+
+    #[test]
+    fn test_partial_evaluate_all_vars_fixed() {
+        // Polynomial: 2x + 3y + 4xy + 5z
+        let polynomial = MultilinearPolynomial {
+            terms: vec![
+                Term {
+                    coefficient: 2.0,
+                    variables: vec!['x'],
+                },
+                Term {
+                    coefficient: 3.0,
+                    variables: vec!['y'],
+                },
+                Term {
+                    coefficient: 4.0,
+                    variables: vec!['x', 'y'],
+                },
+                Term {
+                    coefficient: 5.0,
+                    variables: vec!['z'],
+                },
+            ],
+        };
+
+        // Fix x = 1, y = 2, z = 3
+        let fixed_vars: HashMap<char, f64> = [('x', 1.0), ('y', 2.0), ('z', 3.0)].iter().cloned().collect();
+        let evaluated_polynomial = polynomial.partial_evaluate(&fixed_vars);
+
+        // Expected result: 2(1) + 3(2) + 4(1)(2) + 5(3) = 2 + 6 + 8 + 15 = 31
+        let expected_polynomial = MultilinearPolynomial {
+            terms: vec![Term {
+                coefficient: 31.0,
+                variables: vec![],
+            }],
+        };
+
+        assert_eq!(evaluated_polynomial, expected_polynomial);
+    }
+}

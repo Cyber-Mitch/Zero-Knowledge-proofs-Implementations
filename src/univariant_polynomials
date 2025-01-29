@@ -1,0 +1,120 @@
+use std::ops::{Add, Mul};
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Polynomial {
+    coefficients: Vec<f64>,
+}
+
+impl Polynomial {
+    /// Creates a new polynomial by trimming trailing zeros from the coefficients
+    pub fn new(coefficients: Vec<f64>) -> Self {
+        let mut coeff = coefficients;
+        // Remove trailing zeros
+        while let Some(last) = coeff.last() {
+            if *last == 0.0 {
+                coeff.pop();
+            } else {
+                break;
+            }
+        }
+        Polynomial { coefficients: coeff }
+    }
+
+    /// Evaluates the polynomial at x using Horner's method
+    pub fn evaluate(&self, x: f64) -> f64 {
+        if self.coefficients.is_empty() {
+            return 0.0;
+        }
+        let mut result = 0.0;
+        for &coeff in self.coefficients.iter().rev() {
+            result = result * x + coeff;
+        }
+        result
+    }
+
+    /// Returns the degree of the polynomial (highest power with non-zero coefficient)
+    /// The zero polynomial returns -1 by convention
+    pub fn degree(&self) -> i32 {
+        self.coefficients.len() as i32 - 1
+    }
+}
+
+impl Add for Polynomial {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        let max_len = std::cmp::max(self.coefficients.len(), rhs.coefficients.len());
+        let mut result_coeff = Vec::with_capacity(max_len);
+        for i in 0..max_len {
+            let a = self.coefficients.get(i).copied().unwrap_or(0.0);
+            let b = rhs.coefficients.get(i).copied().unwrap_or(0.0);
+            result_coeff.push(a + b);
+        }
+        Polynomial::new(result_coeff)
+    }
+}
+
+impl Mul for Polynomial {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        if self.coefficients.is_empty() || rhs.coefficients.is_empty() {
+            return Polynomial::new(vec![]);
+        }
+        let m = self.coefficients.len();
+        let n = rhs.coefficients.len();
+        let mut result_coeff = vec![0.0; m + n - 1];
+        for (i, &a) in self.coefficients.iter().enumerate() {
+            for (j, &b) in rhs.coefficients.iter().enumerate() {
+                result_coeff[i + j] += a * b;
+            }
+        }
+        Polynomial::new(result_coeff)
+    }
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_evaluation() {
+        let p = Polynomial::new(vec![5.0, 2.0, 3.0]); // 5 + 2x + 3x²
+        assert_eq!(p.evaluate(2.0), 5.0 + 4.0 + 12.0);
+    }
+
+    #[test]
+    fn test_addition() {
+        let p1 = Polynomial::new(vec![1.0, 2.0]);       // 1 + 2x
+        let p2 = Polynomial::new(vec![3.0, 4.0, 5.0]);  // 3 + 4x + 5x²
+        let sum = p1 + p2;
+        assert_eq!(sum.coefficients, vec![4.0, 6.0, 5.0]); // 4 + 6x + 5x²
+    }
+
+    #[test]
+    fn test_multiplication() {
+        let p1 = Polynomial::new(vec![1.0, 1.0]); // 1 + x
+        let p2 = Polynomial::new(vec![1.0, 1.0]); // 1 + x
+        let product = p1 * p2;
+        assert_eq!(product.coefficients, vec![1.0, 2.0, 1.0]); // 1 + 2x + x²
+    }
+
+    #[test]
+    fn test_zero_polynomial() {
+        let p1 = Polynomial::new(vec![]);
+        let p2 = Polynomial::new(vec![1.0, 2.0]);
+        let sum = p1.clone() + p2.clone();
+        assert_eq!(sum.coefficients, vec![1.0, 2.0]);
+
+        let product = p1 * p2;
+        assert_eq!(product.coefficients, vec![]);
+    }
+
+    #[test]
+    fn test_trimming() {
+        let p = Polynomial::new(vec![0.0, 0.0, 3.0, 0.0, 0.0]);
+        assert_eq!(p.coefficients, vec![0.0, 0.0, 3.0]);
+    }
+}
