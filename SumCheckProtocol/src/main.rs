@@ -1,6 +1,4 @@
-fn main() {
-    println!("Hello, world!");
-}
+
 // Declare modules so that the compiler includes their code.
 mod fiat_shamir_for_sumcheck;
 mod sum_check_protocol;
